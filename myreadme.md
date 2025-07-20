@@ -1,3 +1,5 @@
+## my own readme 
+
 First of all in Berkeley Sockets
 we would create our own socket and currently we are writing the client side of the application
 so as are we writing a client there must. be a server sittling idle waiting to listen for incoming connection
@@ -6,7 +8,7 @@ port no will be the number that the application will acquire form the OS
 so that other side could connect to it
 ports from 0 to 1000 are reserved
 
-# TCP = Transmission Control Protocol
+### TCP = Transmission Control Protocol
 reliable, connection-based protocol built on top of IP (Internet Protocol).
 Key Features of TCP:
 1.Guarantees delivery of packets in order
@@ -14,17 +16,17 @@ Key Features of TCP:
 3Provides a stream-oriented connection (like a pipe between two systems)
 4.Handles flow control, congestion control, and error checking
 
-# Why TCP in chat apps?
+### Why TCP in chat apps?
 You need messages to arrive in full and in order
 You want the connection to stay alive (like a phone call)
 Think of TCP as a virtual wire between two systems — you write on one end, it comes out the other, no mess.
 
-# POSIX Threads (pthreads)?  POSIX = Portable Operating System Interface
+### POSIX Threads (pthreads)?  POSIX = Portable Operating System Interface
  standard threading library on UNIX-based systems (Linux, macOS)
  Let’s you run multiple tasks in parallel within the same process
  a family of standards for UNIX systems — including threads.
 
-# How POSIX threads are used in your code?
+### How POSIX threads are used in your code?
 pthread_t id ;
 pthread_create(&id, NULL, listenAndPrint, socketFD);
 
@@ -34,7 +36,7 @@ So now:
 main() continues with readConsoleEntriesAndSendToServer()
 While in parallel, listenAndPrint() runs in a background thread.
 
-# SOCKETclient -main.c code explanation
+### SOCKETclient -main.c code explanation
 a basic TCP client app using POSIX threads to handle sending and receiving messages concurrently, likely connecting to a TCP chat server on 127.0.0.1:2000
 
 Function by Function Breakdown()
@@ -74,7 +76,7 @@ If data is received, prints it, If recv() returns 0 (socket closed), breaks and 
 
 
 now we are going to work on the Socketserver main.c so that it could listen to our socket
-# multi-client TCP chat server.
+### multi-client TCP chat server.
 
 Listens for incoming connections on port 2000.
 Accepts each connection and spawns a new thread to handle that client.
@@ -110,7 +112,7 @@ Wraps details into a custom AcceptedSocket struct for easier handling.
 
 
 
-# socketutil.h
+### socketutil.h
 ------------>>>> helper utility file for simplifying common socket operations in C.
 Header guard. Prevents the file from being included multiple times during compilation.
 
@@ -125,7 +127,7 @@ declaring a function that allocates and returns a pointer to a filled-in sockadd
 int createTCPIpv4Socket();- creates a basic TCP (IPv4) socket 
 
 
-# socketutil.c
+### socketutil.c
 ------------>>>> implements the functions declared in your socketutil.h header, and it’s meant to simplify basic socket operations
 
 AF_INET → IPv4
@@ -149,7 +151,7 @@ Better: Either return by value or clearly document that the caller must free() i
 malloc() succeeded (could return NULL)
 inet_pton() succeeded (returns 1 on success)
 
-# CMakeLists.txt 
+### CMakeLists.txt 
 is a build script for CMake that defines how to compile a small C library called SocketUtil
 
 cmake_minimum_required(VERSION 3.23)
@@ -197,4 +199,4 @@ Slightly slower startup (dynamic linking happens at runtime).
 If this is a small self-contained project, static is simpler.
 If you're planning to reuse the code across multiple apps, shared can be cleaner — especially in larger systems or when maintaining libraries.
 
-🧭
+
