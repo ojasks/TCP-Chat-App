@@ -1,1 +1,0 @@
-/opt/homebrew/bin/gcc-14  -arch arm64 -dynamiclib -Wl,-headerpad_max_install_names -o libSocketUtil.dylib -install_name @rpath/libSocketUtil.dylib CMakeFiles/SocketUtil.dir/socketutil.c.o
