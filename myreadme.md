@@ -1,4 +1,4 @@
-## my own readme 
+## My own readme 
 
 First of all in Berkeley Sockets
 we would create our own socket and currently we are writing the client side of the application
