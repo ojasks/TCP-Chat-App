@@ -1,0 +1,22 @@
+# CMake build directory
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Binaries
+SocketServer
+SocketClient
+*.out
+
+# macOS
+.DS_Store
+
+# Editor/IDE
+*.swp
+*.bak
+*.log
+*.tmp
+.vscode/
+.idea/
