@@ -1,0 +1,3 @@
+/Users/goldbook/Desktop/SockTalk/SocketUtil/build/CMakeFiles/SocketUtil.dir
+/Users/goldbook/Desktop/SockTalk/SocketUtil/build/CMakeFiles/edit_cache.dir
+/Users/goldbook/Desktop/SockTalk/SocketUtil/build/CMakeFiles/rebuild_cache.dir

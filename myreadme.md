@@ -107,3 +107,94 @@ Loops through the acceptedSockets list and sends the message to all clients exce
 6. acceptIncomingConnection()
 Calls accept() to wait for a new client.
 Wraps details into a custom AcceptedSocket struct for easier handling.
+
+
+
+# socketutil.h
+------------>>>> helper utility file for simplifying common socket operations in C.
+Header guard. Prevents the file from being included multiple times during compilation.
+
+stdio.h — for input/output (e.g., printf)
+sys/socket.h, netinet/in.h, arpa/inet.h — all needed for socket creation and address manipulation
+string.h — for memset, strcpy, etc.
+malloc.h — for malloc
+
+* struct sockaddr_in* createIPv4Address(char *ip, int port);
+declaring a function that allocates and returns a pointer to a filled-in sockaddr_in structure using ip and port
+
+int createTCPIpv4Socket();- creates a basic TCP (IPv4) socket 
+
+
+# socketutil.c
+------------>>>> implements the functions declared in your socketutil.h header, and it’s meant to simplify basic socket operations
+
+AF_INET → IPv4
+SOCK_STREAM → TCP
+0 → Default protocol
+
+Dynamically allocates a sockaddr_in struct (used in bind, connect, etc.).
+Sets:
+IPv4 family
+Port (converted to network byte order)
+IP address:
+If ip is empty (""), uses INADDR_ANY (i.e., 0.0.0.0 → bind to all interfaces).
+Else, converts the string IP to binary using inet_pton().
+
+
+the problems in previous code were:
+. Memory Leak Risk
+malloc-ing a struct and returning a pointer, but nowhere in the code is this pointer ever freed. That’s a memory leak.
+Better: Either return by value or clearly document that the caller must free() it.
+. Poor Error Handling
+malloc() succeeded (could return NULL)
+inet_pton() succeeded (returns 1 on success)
+
+# CMakeLists.txt 
+is a build script for CMake that defines how to compile a small C library called SocketUtil
+
+cmake_minimum_required(VERSION 3.23)
+This sets the minimum required version of CMake to run this build script.
+
+project(SocketUtil C)
+SocketUtil is the name of the project.
+
+set(CMAKE_C_STANDARD 99)
+Tells the CMake compiler to use the C99 standard.
+Enables things like // single-line comments, inline, designated initializers, etc.
+
+add_library(SocketUtil socketutil.c)
+key line. - ells CMake to build a static library called libSocketUtil.a from the source file socketutil.c.
+
+After running cmake and then make, this will create:
+libSocketUtil.a  # A static library you can link to in other projects
+
+When and why you'd write this
+modularizing code into a reusable library
+Compile socketutil.c once
+Link it in multiple projects without recompiling
+Cleanly separate logic (e.g., main server logic vs low-level socket setup)
+
+Is a Shared Library better than a Static Library?
+That depends on your goals:
+🔹 Static Library (.a)
+Built into the final executable at compile time.
+Pros:
+No external dependencies — everything is self-contained.
+Safer for deployment (easier to copy just one binary).
+Cons:
+Larger final executable.
+If you update the library, you have to rebuild every program using it.
+🔹 Shared Library (.so on Linux)
+Linked at runtime, not baked into the executable.
+Pros:
+Smaller executable.
+Multiple programs can share the same .so file.
+Update the library once, and every linked program benefits.
+Cons:
+Deployment is trickier — the .so must be present on the system.
+Slightly slower startup (dynamic linking happens at runtime).
+🧠 Conclusion:
+If this is a small self-contained project, static is simpler.
+If you're planning to reuse the code across multiple apps, shared can be cleaner — especially in larger systems or when maintaining libraries.
+
+🧭

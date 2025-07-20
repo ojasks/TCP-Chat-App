@@ -1,18 +1,24 @@
-cmake_minimum_required(VERSION 3.23)
-project(SocketServer C)
+# cmake_minimum_required(VERSION 3.23)
+# project(SocketServer C)
 
-set(CMAKE_C_STANDARD 99)
+# set(CMAKE_C_STANDARD 99)
 
 
 
-find_path(TheHeaderFile socketutil.h
-        PATHS /home/masoudy/Desktop/SocketCProjects/SocketUtil)
+# find_path(TheHeaderFile socketutil.h
+#         PATHS /home/masoudy/Desktop/SocketCProjects/SocketUtil)
 
-find_library(TheLibrary
-        NAMES SocketUtil
-        PATHS /home/masoudy/Desktop/SocketCProjects/SocketUtil/cmake-build-debug)
+# find_library(TheLibrary
+#         NAMES SocketUtil
+#         PATHS /home/masoudy/Desktop/SocketCProjects/SocketUtil/cmake-build-debug)
+
+# add_executable(SocketServer main.c)
+
+# include_directories(${TheHeaderFile})
+# target_link_libraries(${PROJECT_NAME} ${TheLibrary})
+
 
 add_executable(SocketServer main.c)
 
-include_directories(${TheHeaderFile})
-target_link_libraries(${PROJECT_NAME} ${TheLibrary})
+target_link_libraries(SocketServer PRIVATE SocketUtil)
+target_include_directories(SocketServer PRIVATE ${PROJECT_SOURCE_DIR}/SocketUtil)

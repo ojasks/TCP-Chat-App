@@ -1,0 +1,1 @@
+/opt/homebrew/bin/gcc-14  -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/SocketClient.dir/main.c.o -o SocketClient  -Wl,-rpath,/Users/goldbook/Desktop/SockTalk/build/SocketUtil ../SocketUtil/libSocketUtil.dylib

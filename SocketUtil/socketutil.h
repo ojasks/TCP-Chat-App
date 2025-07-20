@@ -11,7 +11,7 @@
 
 
 struct sockaddr_in* createIPv4Address(char *ip, int port);
-
+int createClientSocket(const char* ip, int port);
 int createTCPIpv4Socket();
 
 

@@ -1,269 +1,147 @@
 #include <stdbool.h>
-#include <unistd.h>
 #include <pthread.h>
 #include "socketutil.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
 
-struct AcceptedSocket
-{
+#define MAX_CLIENTS 10
+
+struct AcceptedSocket {
     int acceptedSocketFD;
     struct sockaddr_in address;
     int error;
     bool acceptedSuccessfully;
 };
 
-struct AcceptedSocket * acceptIncomingConnection(int serverSocketFD);
-void acceptNewConnectionAndReceiveAndPrintItsData(int serverSocketFD);
-void receiveAndPrintIncomingData(int socketFD);
-
+struct AcceptedSocket* acceptIncomingConnection(int serverSocketFD);
+void* receiveAndPrintIncomingData(void* arg);
+void receiveAndPrintIncomingDataOnSeparateThread(struct AcceptedSocket* pSocket);
+void sendReceivedMessageToOtherClients(const char* buffer, int senderSocketFD);
 void startAcceptingIncomingConnections(int serverSocketFD);
 
-void receiveAndPrintIncomingDataOnSeparateThread(struct AcceptedSocket *pSocket);
-
-void sendReceivedMessageToTheOtherClients(char *buffer,int socketFD);
-
-struct AcceptedSocket acceptedSockets[10] ;
+struct AcceptedSocket acceptedSockets[MAX_CLIENTS];
 int acceptedSocketsCount = 0;
-
+pthread_mutex_t socketListMutex = PTHREAD_MUTEX_INITIALIZER;
 
 void startAcceptingIncomingConnections(int serverSocketFD) {
+    while (true) {
+        struct AcceptedSocket* clientSocket = acceptIncomingConnection(serverSocketFD);
 
-    while(true)
-    {
-        struct AcceptedSocket* clientSocket  = acceptIncomingConnection(serverSocketFD);
-        acceptedSockets[acceptedSocketsCount++] = *clientSocket;
+        if (!clientSocket->acceptedSuccessfully) {
+            fprintf(stderr, "Failed to accept client: %d\n", clientSocket->error);
+            free(clientSocket);
+            continue;
+        }
 
-        receiveAndPrintIncomingDataOnSeparateThread(clientSocket);
+        pthread_mutex_lock(&socketListMutex);
+        if (acceptedSocketsCount < MAX_CLIENTS) {
+            acceptedSockets[acceptedSocketsCount++] = *clientSocket;
+            receiveAndPrintIncomingDataOnSeparateThread(clientSocket);
+        } else {
+            fprintf(stderr, "Max client limit reached. Connection refused.\n");
+            close(clientSocket->acceptedSocketFD);
+            free(clientSocket);
+        }
+        pthread_mutex_unlock(&socketListMutex);
     }
 }
 
+void receiveAndPrintIncomingDataOnSeparateThread(struct AcceptedSocket* pSocket) {
+    pthread_t thread;
+    int* pSocketFD = malloc(sizeof(int));
+    *pSocketFD = pSocket->acceptedSocketFD;
 
-
-void receiveAndPrintIncomingDataOnSeparateThread(struct AcceptedSocket *pSocket) {
-
-    pthread_t id;
-    pthread_create(&id,NULL,receiveAndPrintIncomingData,pSocket->acceptedSocketFD);
+    if (pthread_create(&thread, NULL, receiveAndPrintIncomingData, pSocketFD) != 0) {
+        perror("Failed to create thread");
+        free(pSocketFD);
+    }
+    pthread_detach(thread);
 }
 
-void receiveAndPrintIncomingData(int socketFD) {
+void* receiveAndPrintIncomingData(void* arg) {
+    int socketFD = *((int*)arg);
+    free(arg);
     char buffer[1024];
 
-    while (true)
-    {
-        ssize_t  amountReceived = recv(socketFD,buffer,1024,0);
+    while (true) {
+        ssize_t amountReceived = recv(socketFD, buffer, sizeof(buffer) - 1, 0);
+        if (amountReceived <= 0) break;
 
-        if(amountReceived>0)
-        {
-            buffer[amountReceived] = 0;
-            printf("%s\n",buffer);
+        buffer[amountReceived] = '\0';
+        printf("Client %d: %s\n", socketFD, buffer);
 
-            sendReceivedMessageToTheOtherClients(buffer,socketFD);
-        }
-
-        if(amountReceived==0)
-            break;
+        sendReceivedMessageToOtherClients(buffer, socketFD);
     }
 
     close(socketFD);
-}
 
-void sendReceivedMessageToTheOtherClients(char *buffer,int socketFD) {
-
-    for(int i = 0 ; i<acceptedSocketsCount ; i++)
-        if(acceptedSockets[i].acceptedSocketFD !=socketFD)
-        {
-            send(acceptedSockets[i].acceptedSocketFD,buffer, strlen(buffer),0);
+    pthread_mutex_lock(&socketListMutex);
+    // Remove from acceptedSockets
+    for (int i = 0; i < acceptedSocketsCount; ++i) {
+        if (acceptedSockets[i].acceptedSocketFD == socketFD) {
+            for (int j = i; j < acceptedSocketsCount - 1; ++j)
+                acceptedSockets[j] = acceptedSockets[j + 1];
+            acceptedSocketsCount--;
+            break;
         }
+    }
+    pthread_mutex_unlock(&socketListMutex);
 
+    return NULL;
 }
 
-struct AcceptedSocket * acceptIncomingConnection(int serverSocketFD) {
-    struct sockaddr_in  clientAddress ;
-    int clientAddressSize = sizeof (struct sockaddr_in);
-    int clientSocketFD = accept(serverSocketFD,&clientAddress,&clientAddressSize);
+void sendReceivedMessageToOtherClients(const char* buffer, int senderSocketFD) {
+    pthread_mutex_lock(&socketListMutex);
+    for (int i = 0; i < acceptedSocketsCount; ++i) {
+        int targetSocket = acceptedSockets[i].acceptedSocketFD;
+        if (targetSocket != senderSocketFD) {
+            send(targetSocket, buffer, strlen(buffer), 0);
+        }
+    }
+    pthread_mutex_unlock(&socketListMutex);
+}
 
-    struct AcceptedSocket* acceptedSocket = malloc(sizeof (struct AcceptedSocket));
+struct AcceptedSocket* acceptIncomingConnection(int serverSocketFD) {
+    struct sockaddr_in clientAddress;
+    socklen_t clientAddressSize = sizeof(clientAddress);
+
+    int clientSocketFD = accept(serverSocketFD, (struct sockaddr*)&clientAddress, &clientAddressSize);
+
+    struct AcceptedSocket* acceptedSocket = malloc(sizeof(struct AcceptedSocket));
     acceptedSocket->address = clientAddress;
     acceptedSocket->acceptedSocketFD = clientSocketFD;
-    acceptedSocket->acceptedSuccessfully = clientSocketFD>0;
-
-    if(!acceptedSocket->acceptedSuccessfully)
-        acceptedSocket->error = clientSocketFD;
-
-
+    acceptedSocket->acceptedSuccessfully = (clientSocketFD >= 0);
+    acceptedSocket->error = clientSocketFD;
 
     return acceptedSocket;
 }
 
-
 int main() {
-
     int serverSocketFD = createTCPIpv4Socket();
-    struct sockaddr_in *serverAddress = createIPv4Address("",2000);
+    struct sockaddr_in* serverAddress = createIPv4Address("0.0.0.0", 2000);  // binds to all interfaces
 
-    int result = bind(serverSocketFD,serverAddress, sizeof(*serverAddress));
-    if(result == 0)
-        printf("socket was bound successfully\n");
 
-    int listenResult = listen(serverSocketFD,10);
+    int bindResult = bind(serverSocketFD, (struct sockaddr*)serverAddress, sizeof(*serverAddress));
+    if (bindResult == 0)
+        printf("Socket bound to port 2000\n");
+    else {
+        perror("Bind failed");
+        exit(1);
+    }
 
+    if (listen(serverSocketFD, MAX_CLIENTS) != 0) {
+        perror("Listen failed");
+        exit(1);
+    }
+
+    printf("Server listening on port 2000\n");
     startAcceptingIncomingConnections(serverSocketFD);
 
-    shutdown(serverSocketFD,SHUT_RDWR);
-
+    shutdown(serverSocketFD, SHUT_RDWR);
+    close(serverSocketFD);
     return 0;
 }
-
-
-
-
-
-// // tcp_server.c
-
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
-// #include <unistd.h>
-// #include <pthread.h>
-// #include <signal.h>
-// #include <stdbool.h>
-// #include <errno.h>
-// #include <netinet/in.h>
-
-// #define MAX_CLIENTS 10
-// #define BUFFER_SIZE 1024
-// #define PORT 2000
-
-// volatile bool isRunning = true;
-// pthread_mutex_t clients_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-// struct Client {
-//     int socketFD;
-//     struct sockaddr_in address;
-// };
-
-// struct Client clients[MAX_CLIENTS];
-// int clientCount = 0;
-
-// void shutdownServer(int signo) {
-//     isRunning = false;
-//     printf("\nShutting down server...\n");
-//     for (int i = 0; i < clientCount; i++) {
-//         close(clients[i].socketFD);
-//     }
-//     exit(0);
-// }
-
-// void broadcastMessage(const char *message, int senderFD) {
-//     pthread_mutex_lock(&clients_mutex);
-//     for (int i = 0; i < clientCount; i++) {
-//         if (clients[i].socketFD != senderFD) {
-//             if (send(clients[i].socketFD, message, strlen(message), 0) == -1) {
-//                 perror("send failed");
-//             }
-//         }
-//     }
-//     pthread_mutex_unlock(&clients_mutex);
-// }
-
-// void *handleClient(void *arg) {
-//     int socketFD = *(int *)arg;
-//     free(arg);
-
-//     char buffer[BUFFER_SIZE];
-//     ssize_t bytesRead;
-
-//     while (isRunning && (bytesRead = recv(socketFD, buffer, BUFFER_SIZE - 1, 0)) > 0) {
-//         buffer[bytesRead] = '\0';
-//         printf("Client %d: %s", socketFD, buffer);
-//         broadcastMessage(buffer, socketFD);
-//     }
-
-//     if (bytesRead == -1) {
-//         perror("recv failed");
-//     } else {
-//         printf("Client %d disconnected.\n", socketFD);
-//     }
-
-//     pthread_mutex_lock(&clients_mutex);
-//     for (int i = 0; i < clientCount; i++) {
-//         if (clients[i].socketFD == socketFD) {
-//             for (int j = i; j < clientCount - 1; j++) {
-//                 clients[j] = clients[j + 1];
-//             }
-//             clientCount--;
-//             break;
-//         }
-//     }
-//     pthread_mutex_unlock(&clients_mutex);
-
-//     close(socketFD);
-//     return NULL;
-// }
-
-// int main() {
-//     signal(SIGINT, shutdownServer);
-
-//     int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-//     if (serverSocket == -1) {
-//         perror("socket failed");
-//         return 1;
-//     }
-
-//     struct sockaddr_in serverAddr = {
-//         .sin_family = AF_INET,
-//         .sin_addr.s_addr = INADDR_ANY,
-//         .sin_port = htons(PORT)
-//     };
-
-//     if (bind(serverSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) {
-//         perror("bind failed");
-//         close(serverSocket);
-//         return 1;
-//     }
-
-//     if (listen(serverSocket, MAX_CLIENTS) < 0) {
-//         perror("listen failed");
-//         close(serverSocket);
-//         return 1;
-//     }
-
-//     printf("Server is listening on port %d...\n", PORT);
-
-//     while (isRunning) {
-//         struct sockaddr_in clientAddr;
-//         socklen_t addrLen = sizeof(clientAddr);
-//         int *clientSocket = malloc(sizeof(int));
-//         *clientSocket = accept(serverSocket, (struct sockaddr *)&clientAddr, &addrLen);
-
-//         if (*clientSocket < 0) {
-//             perror("accept failed");
-//             free(clientSocket);
-//             continue;
-//         }
-
-//         pthread_mutex_lock(&clients_mutex);
-//         if (clientCount >= MAX_CLIENTS) {
-//             printf("Too many connections. Rejecting client.\n");
-//             close(*clientSocket);
-//             free(clientSocket);
-//             pthread_mutex_unlock(&clients_mutex);
-//             continue;
-//         }
-//         clients[clientCount].socketFD = *clientSocket;
-//         clients[clientCount].address = clientAddr;
-//         clientCount++;
-//         pthread_mutex_unlock(&clients_mutex);
-
-//         pthread_t tid;
-//         if (pthread_create(&tid, NULL, handleClient, clientSocket) != 0) {
-//             perror("pthread_create failed");
-//             close(*clientSocket);
-//             free(clientSocket);
-//         } else {
-//             pthread_detach(tid); // no need to join manually
-//         }
-//     }
-
-//     close(serverSocket);
-//     return 0;
-// }
